@@ -1,0 +1,131 @@
+
+
+clear
+core_count =8;
+
+
+%dir_root = 'D:\test_tracing';
+%dir_root = uigetdir('D:\', 'file folder');
+dir_root = 'D:\20190530_UC_U347_C57J_p56_F_optical';
+
+dir_in = [dir_root '/skeletonized'];
+dir_tif = [dir_root '/binarized'];
+dir_radii = [dir_root '/radii'];
+dir_clean_skel = [dir_root '/clean_skel'];
+
+
+
+fprintf('Reading skeleton \n');
+DirTif = dir([dir_tif '/*.tif']);
+
+
+FileTif=[DirTif(1).folder '/' DirTif(1).name];
+InfoImage=imfinfo(FileTif);
+mImage=InfoImage(1).Width;
+nImage=InfoImage(1).Height;
+lImage = length(InfoImage);
+numberFiles = length(DirTif);
+
+sizeImage = [nImage, mImage, lImage];
+CropRange = [1, nImage; 1, mImage; 1, lImage.*numberFiles];
+CropSize = CropRange(:,2);
+
+
+
+fileIndicator = [dir_clean_skel '/clean_skel.bin' ];
+fileID = fopen(fileIndicator);
+S_skel = fread(fileID,'uint64');
+fclose(fileID);
+
+fileIndicator = [dir_clean_skel '/clean_radii.bin' ];
+fileID = fopen(fileIndicator);
+S_radii = fread(fileID,'double');
+fclose(fileID);
+
+[S_link, S_link_group, wierdNode, wierdNode_group] = pre_statistics(S_skel, CropSize);
+
+
+S_link.radii = S_radii(S_link.name);
+
+
+
+
+fprintf('Reading annotation \n');
+
+%info = imfinfo([dir_root '/registraion/result.tif']);
+info = imfinfo('D:\20190530_UC_U347_C57J_p56_F_optical\registration\result.tif');
+clear im_in
+parfor ii=1:length(info)
+    im_in(:,:,ii) = imread(info(1).Filename,ii);
+end
+
+
+[xxx, yyy, zzz] = ind2sub(CropSize,S_skel);
+zzz = zzz + 50;
+
+xxx = ceil(xxx./10);
+yyy = ceil(yyy./10);
+zzz = ceil(zzz./10);
+
+idx = sub2ind(size(im_in),xxx,yyy,zzz);
+
+S_annotation = im_in(idx);
+
+
+
+%Visp = 385 %SomatoSensory = 453 %PTLp = 22
+% 698 = OLF  %909 = ENT
+% 549 = Thalamus  %375 = Ammon's horn
+%485 = Striatum dorsal region
+
+
+ROI_list = [997; 8; 567; 688; 695; 315; 512; 528; 343; 1073; 623; 477; 453;
+    645; 1089; 322; 1129; 485; 672; 669; 698; 1017; 500; 549; 1080; 313; 375;
+    822; 985; 254; 385; 928; 856; 1009; 1025; 1097; 961; 1065; 323; 378; 993; 
+    247; 329; 493; 1007; 909];
+
+
+quality_ratio = 1;
+for ii =1:length(ROI_list)
+    NNN = ROI_list(ii);
+    fprintf('Reading ROI \n');
+    [list_of_all_ROI_inside] = read_ROI(NNN);
+    
+    inside_ROI = false(size(S_annotation));
+    ROI_map = false(size(im_in));
+
+    for jj = 1:length(list_of_all_ROI_inside)
+        
+        inside_ROI = inside_ROI | S_annotation == list_of_all_ROI_inside(jj);
+        ROI_map = ROI_map | im_in == list_of_all_ROI_inside(jj);
+    end
+    
+    
+    node_in{ii}.name = wierdNode_group.name(inside_ROI(wierdNode_group.name));
+    node_in{ii}.connection_count = wierdNode_group.connection_count(inside_ROI(wierdNode_group.name));
+    link_in{ii}.name = S_link_group.name(inside_ROI(S_link_group.name));
+    link_in{ii}.length = S_link_group.length(inside_ROI(S_link_group.name));
+    [~,loc] = ismember(S_link.group(ismember(S_link.group,link_in{ii}.name)),link_in{ii}.name);
+    link_in{ii}.radii = accumarray(loc, S_link.radii(ismember(S_link.group,link_in{ii}.name)).*S_link.length(ismember(S_link.group,link_in{ii}.name)));
+    link_in{ii}.radii = link_in{ii}.radii./ link_in{ii}.length;
+    total_skel = sum(inside_ROI(S_link.name));
+    total_disconnected = sum(node_in{ii}.connection_count == 1);
+    
+    quality_ratio(ii) = total_disconnected./total_skel;
+    total_length(ii) = sum(link_in{ii}.length);
+    [~, length_bin] = histc(link_in{ii}.length,10:10:2000);
+    [~, radii_bin] = histc(link_in{ii}.radii,0.1:0.1:50);
+    
+    hist_radii_length{ii} = accumarray(radii_bin,link_in{ii}.radii.*link_in{ii}.length);
+    total_radii_length
+
+    total_volume(ii) = sum(ROI_map(:));
+    
+
+
+end
+
+clear S_link im_in xxx yyy zzz S_skel S_radii idx S_annotation inside_ROI
+save statistic.mat
+
+

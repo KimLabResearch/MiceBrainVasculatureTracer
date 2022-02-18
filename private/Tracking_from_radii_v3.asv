@@ -1,0 +1,96 @@
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+clear 
+core_count =8;
+
+dir_root = uigetdir('D:\', 'file folder');
+
+dir_in = [dir_root '/skeletonized'];
+dir_tif = [dir_root '/binarized'];
+dir_radii = [dir_root '/radii'];
+
+trim_deadend_length = 30; %% 1um per integer, trim the isolated end branches that is short
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+fprintf('Reading image \n');
+DirTif = dir([dir_tif '/*.tif']);
+
+
+FileTif=[DirTif(1).folder '/' DirTif(1).name];
+InfoImage=imfinfo(FileTif);
+mImage=InfoImage(1).Width;
+nImage=InfoImage(1).Height;
+lImage = length(InfoImage);
+numberFiles = length(DirTif);
+
+sizeImage = [nImage, mImage, lImage];
+CropRange = [1, nImage; 1, mImage; 1, lImage.*numberFiles];
+
+
+[S_skel, S_radii] = ReadKim_Radii(dir_in, dir_radii, sizeImage,CropRange,[]);
+
+S_radii = sqrt(S_radii);
+
+
+
+
+[S_link,  wierdNode, S_new] = trim_v2(S_skel,S_radii,CropSize,trim_deadend_length);
+
+[Slink_g1, Slink_g3] = calculat_length(S_link, S_new, CropSize);
+
+list_link_group = unique(Slink_g1.group);
+tic
+for ii = 1:length(list_link_group)
+    link_group.length(ii) = sum(Slink_g1.length(Slink_g1.group == list_link_group(ii)));
+    link_group.length(ii) = link_group.length(ii) + sum(Slink_g3.length(Slink_g3.group == list_link_group(ii)));
+    link_group.radii(ii) = sum(Slink_g1.radii(Slink_g1.group == list_link_group(ii)).*Slink_g1.length(Slink_g1.group == list_link_group(ii)));
+    link_group.radii(ii) = link_group.radii(ii) + sum(Slink_g3.radii(Slink_g3.group == list_link_group(ii)).*Slink_g3.length(Slink_g3.group == list_link_group(ii)));
+    link_group.radii(ii) = link_group.radii(ii)./link_group.length(ii);
+    
+end
+toc
+
+
+for ii = 1:length(Slink_g3.connected)
+    node_group.connected(ii) = length(Slink_g3.connected(ii).name);
+    
+end
+
+node_group.connected = node_group.connected(node_group.connected~=2);
+%figure();
+%histogram(node_group.connected);
+node_count = histc(node_group.connected,[1 2 3 4 5 6 7 8])
+
+regionID = num2str(regionID);
+save([regionID '.mat'],  '-v7.3');
+
+
+
+%{
+figure()
+
+[xxx, yyy, zzz] = ind2sub(CropSize, S_new.skel);
+color3 = [S_new.radii./5 1-S_new.radii./5 zeros(size(xxx))];
+scatter3(xxx,yyy,zzz,S_new.radii.*8.0, color3,'filled');
+
+
+view(-30,10)
+axis equal
+
+
+
+figure()
+[xxx, yyy, zzz] = ind2sub(CropSize, S_new.skel);
+colorR = rand(length(S_skel),3);
+colorR = colorR(S_new.group,:);
+scatter3(xxx,yyy,zzz,S_new.radii.*8.0, colorR,'filled');
+view(-30,10)
+axis equal
+
+%}
+

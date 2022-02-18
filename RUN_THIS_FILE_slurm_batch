@@ -1,0 +1,27 @@
+#!/bin/bash -l
+#SBATCH --account=lab_kim
+#SBATCH --partition=dense
+#SBATCH --job-name=C57J_young
+#SBATCH --mail-user=uwc5003@psu.edu
+#SBATCH --mail-type=FAIL,END
+#SBATCH --output=GPU_XXX.%j.%N.out
+#SBATCH --error=GPU_XXX.%j.%N.err
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=22
+
+#SBATCH --time=100000:00:00
+#SBATCH --mem=1000000
+
+module load matlab
+
+
+rm ~/.matlab/* -rf
+matlab -nodisplay -batch binarization_22
+rm ~/.matlab/* -rf
+matlab -nodisplay -batch Skeletonize_all_rework_22
+rm ~/.matlab/* -rf
+matlab -nodisplay -batch radii_from_skele_all_22
+rm ~/.matlab/* -rf
+matlab -nodisplay -batch Tracking_from_radii_v3_22
+
